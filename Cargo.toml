@@ -1,0 +1,20 @@
+[package]
+authors = ["cyqsimon <28627918+cyqsimon@users.noreply.github.com>"]
+categories = ["asynchronous", "caching", "filesystem"]
+description = "A least-frequently-used cache layered on a directory"
+edition = "2021"
+keywords = ["file-cache"]
+license = "MIT"
+name = "file-lfu"
+version = "0.1.0"
+
+[features]
+default = []
+utf8-paths = ["camino"]
+
+[dependencies]
+async-trait = "0.1.68"
+camino = {version = "1.1.4", optional = true}
+# temporarily using personal fork (PR pending)
+lfu_cache = {git = "https://github.com/cyqsimon/lfu-cache.git", branch = "peek-lfu-key"}
+thiserror = "1.0.40"
