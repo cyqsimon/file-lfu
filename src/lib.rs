@@ -208,7 +208,9 @@ where
 
         // remove from disk
         let path = self.get_file_path(key);
-        T::delete(path).await?;
+        if path.is_file() {
+            T::delete(path).await?;
+        }
 
         Ok(())
     }
@@ -233,19 +235,26 @@ where
 
     /// Helper function to insert an item, and handle the possible eviction it caused
     /// by flushing the evicted item to the backing directory on disk.
+    ///
+    /// Note that this function requires that the provided key is unique.
+    /// If the key is already present either in cache or on disk, this function will panic.
     async fn insert_and_handle_eviction(&mut self, key: K, item: Arc<T>) -> Result<(), T::Err> {
-        let maybe_evicted_key = self.cache.peek_lfu_key().cloned();
-        let maybe_evicted_item = self.cache.insert(key.clone(), item);
+        assert!(!self.has_key(&key), "key already present");
 
-        match (maybe_evicted_key, maybe_evicted_item) {
+        // when peek_lfu_key() returns `Some`, it just means there is at least 1 item;
+        // an eviction will not necessarily happen on the next insertion
+        let flush_key = self.cache.peek_lfu_key().cloned();
+        let evicted_item = self.cache.insert(key.clone(), item);
+
+        match (flush_key, evicted_item) {
             (Some(key), Some(evicted)) => {
                 let flush_path = self.get_file_path(key);
                 evicted.flush(flush_path).await?;
             }
-            (None, None) => {
-                // noting evicted
+            (_, None) => {
+                // nothing evicted
             }
-            _ => unreachable!("something is wrong with the LFU implementation"),
+            (None, Some(_)) => unreachable!("something is wrong with the LFU implementation"),
         };
 
         Ok(())
