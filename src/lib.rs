@@ -61,6 +61,35 @@ where
         Ok(Self { directory: path, cache })
     }
 
+    /// Get the number of loaded items in cache.
+    pub fn loaded_count(&self) -> usize {
+        self.cache.len()
+    }
+
+    /// Get whether a key already exists, whether in cache or on disk.
+    pub fn has_key(&self, key: impl Borrow<K>) -> bool {
+        let key = key.borrow();
+        self.has_loaded_key(key) || self.has_flushed_key(key)
+    }
+
+    /// Get whether a key has been loaded in cache.
+    pub fn has_loaded_key(&self, key: impl Borrow<K>) -> bool {
+        self.cache.keys().any(|k| k == key.borrow())
+    }
+
+    /// Get whether a key has been flushed to disk.
+    pub fn has_flushed_key(&self, key: impl Borrow<K>) -> bool {
+        self.get_file_path(key).is_file()
+    }
+
+    /// Get an item from cache (if present) using its unique key.
+    ///
+    /// This method requires a mutable reference to self because it increments
+    /// the use frequency of this item.
+    pub fn get(&mut self, key: impl Borrow<K>) -> Option<Arc<T>> {
+        self.cache.get(key.borrow()).cloned()
+    }
+
     /// Get an item from cache using its unique key.
     ///
     /// If the key is not found in cache, a lookup using the key will be performed
@@ -99,7 +128,7 @@ where
         let key = key.borrow();
 
         // lookup cache, load from disk if not found
-        if !self.cache.keys().any(|k| k == key) {
+        if !self.has_loaded_key(key) {
             let item = self.read_from_disk(key).await?;
             self.insert_and_handle_eviction(key.clone(), Arc::new(item))
                 .await?;
