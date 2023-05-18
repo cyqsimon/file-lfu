@@ -6,6 +6,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use uuid::Uuid;
 
 use crate::Path;
 
@@ -20,6 +21,12 @@ where
 {
     /// Generate a new, unique key.
     fn new() -> Self;
+}
+#[cfg(feature = "uuid-as-key")]
+impl Key for uuid::Uuid {
+    fn new() -> Self {
+        Uuid::new_v4()
+    }
 }
 
 /// A data structure with a file representation which can be loaded from
