@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{borrow::Borrow, sync::Arc};
 
 use lfu_cache::LfuCache;
 
@@ -66,8 +66,8 @@ where
     /// If the key is not found in cache, a lookup using the key will be performed
     /// on the backing directory. The matching file will be loaded into the cache
     /// and returned. Eviction will happen if necessary.
-    pub async fn get_or_load(&mut self, key: impl AsRef<K>) -> Result<Arc<T>, Error<K, T::Err>> {
-        let key = key.as_ref();
+    pub async fn get_or_load(&mut self, key: impl Borrow<K>) -> Result<Arc<T>, Error<K, T::Err>> {
+        let key = key.borrow();
 
         // lookup cache, retrieve if loaded
         if let Some(item) = self.cache.get(key) {
@@ -94,9 +94,9 @@ where
     /// because it's not safe to mutate a shared value.
     pub async fn get_or_load_mut(
         &mut self,
-        key: impl AsRef<K>,
+        key: impl Borrow<K>,
     ) -> Result<&mut T, Error<K, T::Err>> {
-        let key = key.as_ref();
+        let key = key.borrow();
 
         // lookup cache, load from disk if not found
         if !self.cache.keys().any(|k| k == key) {
@@ -170,8 +170,8 @@ where
     }
 
     /// Delete an item from both the cache and the backing directory on disk.
-    pub async fn delete(&mut self, key: impl AsRef<K>) -> Result<(), Error<K, T::Err>> {
-        let key = key.as_ref();
+    pub async fn delete(&mut self, key: impl Borrow<K>) -> Result<(), Error<K, T::Err>> {
+        let key = key.borrow();
 
         // remove from cache
         self.cache.remove(key);
@@ -184,13 +184,13 @@ where
     }
 
     /// Helper function to get the file path in the backing directory for a key.
-    fn get_file_path(&self, key: impl AsRef<K>) -> PathBuf {
-        self.directory.join(key.as_ref())
+    pub(crate) fn get_file_path(&self, key: impl Borrow<K>) -> PathBuf {
+        self.directory.join(key.borrow().to_string())
     }
 
     /// Helper function to read an item from the backing directory using its key.
-    async fn read_from_disk(&self, key: impl AsRef<K>) -> Result<T, Error<K, T::Err>> {
-        let key = key.as_ref();
+    async fn read_from_disk(&self, key: impl Borrow<K>) -> Result<T, Error<K, T::Err>> {
+        let key = key.borrow();
 
         let load_path = self.get_file_path(key);
         if !load_path.is_file() {

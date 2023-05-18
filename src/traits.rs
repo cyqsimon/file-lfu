@@ -16,7 +16,7 @@ use crate::Path;
 /// UUIDv4 for most use cases.
 pub trait Key
 where
-    Self: AsRef<Self> + AsRef<Path> + Clone + Debug + Display + Eq + Hash,
+    Self: Clone + Debug + Display + Eq + Hash,
 {
     /// Generate a new, unique key.
     fn new() -> Self;
