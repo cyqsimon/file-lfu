@@ -80,7 +80,7 @@ where
 
     /// Get whether a key has been flushed to disk.
     pub fn has_flushed_key(&self, key: impl Borrow<K>) -> bool {
-        self.get_file_path(key).is_file()
+        self.get_path_for(key).is_file()
     }
 
     /// Get an item from cache (if present) using its unique key.
@@ -166,7 +166,7 @@ where
     /// to self.
     pub async fn direct_flush(&self, item: T) -> Result<K, Error<K, T::Err>> {
         let key = K::new();
-        let flush_path = self.get_file_path(&key);
+        let flush_path = self.get_path_for(&key);
 
         // flush
         Arc::new(item).flush(flush_path).await?;
@@ -186,7 +186,7 @@ where
         let mut errors = vec![];
 
         for (key, item) in self.cache.peek_iter() {
-            let flush_path = self.get_file_path(key);
+            let flush_path = self.get_path_for(key);
             if let Err(err) = item.flush(flush_path).await {
                 errors.push(err.into());
             }
@@ -207,7 +207,7 @@ where
         self.cache.remove(key);
 
         // remove from disk
-        let path = self.get_file_path(key);
+        let path = self.get_path_for(key);
         if path.is_file() {
             T::delete(path).await?;
         }
@@ -216,7 +216,7 @@ where
     }
 
     /// Helper function to get the file path in the backing directory for a key.
-    fn get_file_path(&self, key: impl Borrow<K>) -> PathBuf {
+    fn get_path_for(&self, key: impl Borrow<K>) -> PathBuf {
         self.directory.join(key.borrow().to_string())
     }
 
@@ -224,7 +224,7 @@ where
     async fn read_from_disk(&self, key: impl Borrow<K>) -> Result<T, Error<K, T::Err>> {
         let key = key.borrow();
 
-        let load_path = self.get_file_path(key);
+        let load_path = self.get_path_for(key);
         if !load_path.is_file() {
             Err(Error::NotFound(key.clone()))?
         }
@@ -248,7 +248,7 @@ where
 
         match (flush_key, evicted_item) {
             (Some(key), Some(evicted)) => {
-                let flush_path = self.get_file_path(key);
+                let flush_path = self.get_path_for(key);
                 evicted.flush(flush_path).await?;
             }
             (_, None) => {
