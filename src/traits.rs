@@ -1,9 +1,4 @@
-use std::{
-    error::Error,
-    fmt::{Debug, Display},
-    hash::Hash,
-    sync::Arc,
-};
+use std::{error::Error, fmt::Display, hash::Hash, sync::Arc};
 
 use async_trait::async_trait;
 use uuid::Uuid;
@@ -17,7 +12,7 @@ use crate::Path;
 /// UUIDv4 for most use cases.
 pub trait Key
 where
-    Self: Clone + Debug + Display + Eq + Hash,
+    Self: Clone + Display + Eq + Hash,
 {
     /// Generate a new, unique key.
     fn new() -> Self;

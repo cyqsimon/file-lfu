@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, sync::Arc};
+use std::{borrow::Borrow, fmt::Debug, sync::Arc};
 
 use lfu_cache::LfuCache;
 
@@ -29,6 +29,7 @@ pub type PathBuf = std::path::PathBuf;
 ///
 /// Note that [`Self::flush_all`] should be called before dropping this cache,
 /// otherwise new items and changes in the cache will be lost.
+#[derive(Debug)]
 pub struct FileBackedLfuCache<K, T>
 where
     K: Key,
@@ -213,7 +214,7 @@ where
     }
 
     /// Helper function to get the file path in the backing directory for a key.
-    pub(crate) fn get_file_path(&self, key: impl Borrow<K>) -> PathBuf {
+    fn get_file_path(&self, key: impl Borrow<K>) -> PathBuf {
         self.directory.join(key.borrow().to_string())
     }
 
