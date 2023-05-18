@@ -35,14 +35,14 @@ where
     ///
     /// If you wish to perform non-trivial deserialisation in this function,
     /// you should spawn a blocking task with your async runtime.
-    async fn load(path: impl AsRef<Path>) -> Result<Self, Self::Err>;
+    async fn load(path: impl AsRef<Path> + Send) -> Result<Self, Self::Err>;
 
     /// Flush the data structure to disk asynchronously.
     ///
     /// If you wish to perform non-trivial serialisation in this function,
     /// you should spawn a blocking task with your async runtime.
-    async fn flush(self: &Arc<Self>, path: impl AsRef<Path>) -> Result<(), Self::Err>;
+    async fn flush(self: &Arc<Self>, path: impl AsRef<Path> + Send) -> Result<(), Self::Err>;
 
     /// Delete the data structure from disk asynchronously.
-    async fn delete(path: impl AsRef<Path>) -> Result<(), Self::Err>;
+    async fn delete(path: impl AsRef<Path> + Send) -> Result<(), Self::Err>;
 }
