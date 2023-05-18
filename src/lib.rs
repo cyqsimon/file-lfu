@@ -236,10 +236,10 @@ where
     /// Helper function to insert an item, and handle the possible eviction it caused
     /// by flushing the evicted item to the backing directory on disk.
     ///
-    /// Note that this function requires that the provided key is unique.
-    /// If the key is already present either in cache or on disk, this function will panic.
+    /// Note that this function requires that the provided key is not yet loaded.
+    /// If this key can already be found in cache, this function wil panic.
     async fn insert_and_handle_eviction(&mut self, key: K, item: Arc<T>) -> Result<(), T::Err> {
-        assert!(!self.has_key(&key), "key already present");
+        assert!(!self.has_loaded_key(&key), "key already present in cache");
 
         // when peek_lfu_key() returns `Some`, it just means there is at least 1 item;
         // an eviction will not necessarily happen on the next insertion
