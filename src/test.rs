@@ -222,7 +222,7 @@ async fn can_get(#[future] filled_cache_setup: (Cache, TempDir), keys: [Uuid; 2]
 
     for key in keys.iter() {
         let res = cache.get(key);
-        assert!(res.is_some());
+        assert!(res.is_ok());
     }
 
     drop(temp_dir);

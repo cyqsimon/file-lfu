@@ -12,6 +12,12 @@ where
     /// This can happen if the path does not resolve to a directory.
     Init(PathBuf),
 
+    /// An item cannot be found with this key in cache.
+    NotInCache(K),
+
+    /// An item cannot be found with this key on disk.
+    NotOnDisk(K),
+
     /// An item cannot be found with this key either in cache or on disk.
     NotFound(K),
 

@@ -96,8 +96,13 @@ where
     ///
     /// This method requires a mutable reference to self because it increments
     /// the use frequency of this item.
-    pub fn get(&mut self, key: impl Borrow<K>) -> Option<Arc<T>> {
-        self.cache.get(key.borrow()).cloned()
+    pub fn get(&mut self, key: impl Borrow<K>) -> Result<Arc<T>, Error<K, T::Err>> {
+        let key = key.borrow();
+
+        self.cache
+            .get(key)
+            .cloned()
+            .ok_or(Error::NotInCache(key.clone()))
     }
 
     /// Get a mutable reference to an item from the cache using its unique key.
@@ -108,7 +113,7 @@ where
         let key = key.borrow();
 
         let Some(item) = self.cache.get_mut(key) else {
-            Err(Error::NotFound(key.clone()))?
+            Err(Error::NotInCache(key.clone()))?
         };
 
         Arc::get_mut(item).ok_or(Error::Immutable(key.clone()))
@@ -128,7 +133,7 @@ where
         }
 
         // load from disk
-        let item = Arc::new(self.read_from_disk(key).await?);
+        let item = Arc::new(self.read_from_disk(key, Error::NotFound).await?);
 
         // insert
         self.insert_and_handle_eviction(key.clone(), Arc::clone(&item))
@@ -153,7 +158,7 @@ where
 
         // lookup cache, load from disk if not found
         if !self.has_loaded_key(key) {
-            let item = self.read_from_disk(key).await?;
+            let item = self.read_from_disk(key, Error::NotFound).await?;
             self.insert_and_handle_eviction(key.clone(), Arc::new(item))
                 .await?;
         }
@@ -254,12 +259,23 @@ where
     }
 
     /// Helper function to read an item from the backing directory using its key.
-    async fn read_from_disk(&self, key: impl Borrow<K>) -> Result<T, Error<K, T::Err>> {
+    ///
+    /// `not_found_variant` is a closure defining which semantic variant of "not found"
+    /// this function should use. This allows the caller to customise the returned error
+    /// according to the semantics of the call site.
+    async fn read_from_disk<F>(
+        &self,
+        key: impl Borrow<K>,
+        not_found_variant: F,
+    ) -> Result<T, Error<K, T::Err>>
+    where
+        F: FnOnce(K) -> Error<K, T::Err>,
+    {
         let key = key.borrow();
 
         let load_path = self.get_path_for(key);
         if !load_path.is_file() {
-            Err(Error::NotFound(key.clone()))?
+            Err(not_found_variant(key.clone()))?
         }
         let item = T::load(load_path).await?;
 
