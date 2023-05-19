@@ -43,18 +43,18 @@ where
     K: Key,
     T: AsyncFileRepr,
 {
-    /// Initialise a cache with a specific size, using the given path as
+    /// Initialise a cache with a specific capacity, using the given path as
     /// the backing directory.
     ///
     /// The provided path must exist and resolve to a directory. Otherwise
     /// an error will be returned.
-    pub fn init(path: impl AsRef<Path>, size: usize) -> Result<Self, Error<K, T::Err>> {
+    pub fn init(path: impl AsRef<Path>, capacity: usize) -> Result<Self, Error<K, T::Err>> {
         let path = path.as_ref().to_owned();
         if !(path.is_dir() || path.canonicalize().map(|p| p.is_dir()).unwrap_or(false)) {
             return Err(Error::Init(path));
         }
 
-        let cache = LfuCache::with_capacity(size);
+        let cache = LfuCache::with_capacity(capacity);
 
         Ok(Self { directory: path, cache })
     }
