@@ -7,15 +7,15 @@ use std::{
 
 use lfu_cache::LfuCache;
 
-use crate::{
+pub use crate::{
     error::Error,
     traits::{AsyncFileRepr, Key},
 };
 
-pub mod error;
+mod error;
 #[cfg(test)]
 mod test;
-pub mod traits;
+mod traits;
 
 /// A LFU (least frequently used) cache layered on top a file system,
 /// where files can be accessed using their unique keys.
