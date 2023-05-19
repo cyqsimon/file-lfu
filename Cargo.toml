@@ -7,7 +7,7 @@ keywords = ["file-cache"]
 license = "MIT"
 name = "file-lfu"
 repository = "https://github.com/cyqsimon/file-lfu"
-version = "1.0.0"
+version = "1.1.0"
 
 [features]
 default = ["uuid-as-key"]
