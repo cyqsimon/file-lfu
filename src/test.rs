@@ -371,6 +371,22 @@ async fn can_evict_and_flush_lfu(#[future] filled_cache_setup: (Cache, TempDir),
 
 #[rstest]
 #[tokio::test]
+async fn can_manual_flush(empty_cache_setup: (Cache, TempDir)) {
+    let (mut cache, temp_dir) = empty_cache_setup;
+
+    let key = cache.push(AllLines::random()).await.unwrap();
+    assert!(cache.has_loaded_key(&key));
+    assert!(!cache.has_flushed_key(&key));
+
+    cache.flush(&key).await.unwrap();
+    assert!(cache.has_loaded_key(&key));
+    assert!(cache.has_flushed_key(&key));
+
+    drop(temp_dir);
+}
+
+#[rstest]
+#[tokio::test]
 async fn can_manual_flush_all(#[with(3)] empty_cache_setup: (Cache, TempDir)) {
     let (mut cache, temp_dir) = empty_cache_setup;
 

@@ -202,6 +202,25 @@ where
         Ok(key)
     }
 
+    /// Flush an item in cache to the backing directory on disk.
+    ///
+    /// The flushed item neither has its frequency incremented, nor will it be evicted.
+    /// Hence this method does not require a mutable reference to self.
+    pub async fn flush(&self, key: impl Borrow<K>) -> Result<(), Error<K, T::Err>> {
+        let key = key.borrow();
+
+        let item = self
+            .cache
+            .peek_iter()
+            .find_map(|(k, v)| (k == key).then_some(v))
+            .ok_or(Error::NotInCache(key.clone()))?;
+
+        let flush_path = self.get_path_for(key);
+        item.flush(flush_path).await?;
+
+        Ok(())
+    }
+
     /// Flush all items in cache to the backing directory on disk.
     ///
     /// The flushed items neither have their frequencies incremented, or are not evicted.
