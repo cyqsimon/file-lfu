@@ -203,6 +203,10 @@ where
     pub async fn delete(&mut self, key: impl Borrow<K>) -> Result<(), Error<K, T::Err>> {
         let key = key.borrow();
 
+        if !self.has_key(key) {
+            Err(Error::NotFound(key.clone()))?
+        }
+
         // remove from cache
         self.cache.remove(key);
 
