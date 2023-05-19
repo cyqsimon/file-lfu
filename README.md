@@ -2,6 +2,7 @@
 
 A least-frequently-used cache layered on a directory.
 
+[crates.io](https://crates.io/crates/file-lfu) [docs.rs](https://docs.rs/file-lfu/latest/file_lfu/index.html)
 
 ## Quick start
 
@@ -23,7 +24,7 @@ use uuid::Uuid;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
    let mut cache = FileBackedLfuCache<Uuid, Foo>::init("/path/to/data/dir", 2)?;
-   
+
    // cache is not full, so no flushes or evictions
    let key0 = cache.push(Foo::new("foo0"))?;
    let key1 = cache.push(Foo::new("foo1"))?;
@@ -75,4 +76,4 @@ what things get cached and if they are cached. This is when this crate comes in 
 
 Notably, this crate allows you to perform arbitrary serialisation and deserialisation
 while loading and flushing, enabling you to cache an easier-to-work-with representation
-of the underlying data in memory. 
+of the underlying data in memory.
