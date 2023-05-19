@@ -23,8 +23,9 @@ pub mod traits;
 /// Files can be loaded from disk and stored in cache. When evicted from cache,
 /// the file is automatically flushed to disk.
 ///
-/// Note that [`Self::flush_all`] should be called before dropping this cache,
-/// otherwise new items and changes in the cache will be lost.
+/// Note that if you are caching persistent data, you should call [`Self::flush_all`]
+/// before dropping this cache. Otherwise new items and changes in the cache
+/// will be lost.
 #[derive(Debug)]
 pub struct FileBackedLfuCache<K, T>
 where
@@ -92,10 +93,8 @@ where
         self.get_path_for(key).is_file()
     }
 
-    /// Get an item from cache (if present) using its unique key.
-    ///
-    /// This method requires a mutable reference to self because it increments
-    /// the use frequency of this item.
+    /// Get an item from cache (if present) using its unique key, and increment
+    /// its usage frequency.
     pub fn get(&mut self, key: impl Borrow<K>) -> Result<Arc<T>, Error<K, T::Err>> {
         let key = key.borrow();
 
@@ -105,7 +104,8 @@ where
             .ok_or(Error::NotInCache(key.clone()))
     }
 
-    /// Get a mutable reference to an item from the cache using its unique key.
+    /// Get a mutable reference to an item from the cache using its unique key,
+    /// and increment its usage frequency.
     ///
     /// If there exists other `Arc`s that point to this item, this function will error
     /// because it's not safe to mutate a shared value.
@@ -119,11 +119,10 @@ where
         Arc::get_mut(item).ok_or(Error::Immutable(key.clone()))
     }
 
-    /// Get an item from cache using its unique key.
+    /// Using a unique key, get an item from cache, or if it is not found in cache,
+    /// load it into cache first and then return it.
     ///
-    /// If the key is not found in cache, a lookup using the key will be performed
-    /// on the backing directory. The matching file will be loaded into the cache
-    /// and returned. Eviction will happen if necessary.
+    /// Usage frequency is incremented in both cases. Eviction will happen if necessary.
     pub async fn get_or_load(&mut self, key: impl Borrow<K>) -> Result<Arc<T>, Error<K, T::Err>> {
         let key = key.borrow();
 
@@ -142,11 +141,11 @@ where
         Ok(item)
     }
 
-    /// Get a mutable reference to an item from cache using its unique key.
+    /// Using a unique key, get a mutable reference to an item from cache,
+    /// or if it not found in cache, load it into cache first and then return
+    /// a mutable reference to it.
     ///
-    /// If the key is not found in cache, a lookup using the key will be performed
-    /// on the backing directory. The matching file will be loaded into the cache
-    /// and have its mutable reference returned. Eviction will happen if necessary.
+    /// Usage frequency is incremented in both cases. Eviction will happen if necessary.
     ///
     /// If there exists other `Arc`s that point to this item, this function will error
     /// because it's not safe to mutate a shared value.
@@ -172,8 +171,9 @@ where
         .ok_or(Error::Immutable(key.clone()))
     }
 
-    /// Push an item into cache and assign it a unique key. Eviction will happen
-    /// if necessary. Returns the assigned key.
+    /// Push an item into cache, assign it a unique key, then return the key.
+    ///
+    /// Usage frequency is incremented. Eviction will happen if necessary.
     ///
     /// Note that the newly added item will not be immediately flushed
     /// to the backing directory on disk.
@@ -190,8 +190,8 @@ where
     /// Directly flush an item into the backing directory on disk without
     /// touching the cache. Returns the assigned key.
     ///
-    /// Eviction will not occur, hence this method does not require mutable reference
-    /// to self.
+    /// Neither frequency increment nor eviction will not occur. Hence this method
+    /// does not require a mutable reference to self.
     pub async fn direct_flush(&self, item: T) -> Result<K, Error<K, T::Err>> {
         let key = K::new();
         let flush_path = self.get_path_for(&key);
@@ -204,8 +204,8 @@ where
 
     /// Flush all items in cache to the backing directory on disk.
     ///
-    /// The flushed items are not evicted, hence this method does not require
-    /// mutable reference to self.
+    /// The flushed items neither have their frequencies incremented, or are not evicted.
+    /// Hence this method does not require a mutable reference to self.
     ///
     /// Note that this method does not fail fast. Instead it makes a flush attempt
     /// on all items in cache, then collects and returns all errors encountered (if any).
