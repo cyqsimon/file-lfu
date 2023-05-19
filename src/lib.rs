@@ -91,6 +91,20 @@ where
         self.cache.get(key.borrow()).cloned()
     }
 
+    /// Get a mutable reference to an item from the cache using its unique key.
+    ///
+    /// If there exists other `Arc`s that point to this item, this function will error
+    /// because it's not safe to mutate a shared value.
+    pub fn get_mut(&mut self, key: impl Borrow<K>) -> Result<&mut T, Error<K, T::Err>> {
+        let key = key.borrow();
+
+        let Some(item) = self.cache.get_mut(key) else {
+            Err(Error::NotFound(key.clone()))?
+        };
+
+        Arc::get_mut(item).ok_or(Error::Immutable(key.clone()))
+    }
+
     /// Get an item from cache using its unique key.
     ///
     /// If the key is not found in cache, a lookup using the key will be performed
@@ -197,6 +211,17 @@ where
         } else {
             Err(errors)
         }
+    }
+
+    /// Evict all items from cache, and optionally flushing all of them
+    /// to the backing directory on disk.
+    pub async fn clear_cache(&mut self, do_flush: bool) -> Result<(), Vec<Error<K, T::Err>>> {
+        if do_flush {
+            self.flush_all().await?;
+        }
+        self.cache.clear();
+
+        Ok(())
     }
 
     /// Delete an item from both the cache and the backing directory on disk.
