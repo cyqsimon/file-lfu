@@ -138,7 +138,7 @@ where
         // retrieve cache
         Arc::get_mut(
             self.cache
-                .get_mut(&key)
+                .get_mut(key)
                 .expect("something is wrong with Arc"), // item either exists in cache or was just loaded
         )
         .ok_or(Error::Immutable(key.clone()))
