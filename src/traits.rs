@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Display, hash::Hash, sync::Arc};
+use std::{error::Error, hash::Hash, sync::Arc};
 
 use async_trait::async_trait;
 
@@ -11,15 +11,22 @@ use crate::Path;
 /// UUIDv4 for most use cases.
 pub trait Key
 where
-    Self: Clone + Display + Eq + Hash,
+    Self: Clone + Eq + Hash,
 {
     /// Generate a new, unique key.
     fn new() -> Self;
+
+    /// Convert this key to a filename used for flushing to disk.
+    fn as_filename(&self) -> String;
 }
 #[cfg(feature = "uuid-as-key")]
 impl Key for uuid::Uuid {
     fn new() -> Self {
         uuid::Uuid::new_v4()
+    }
+
+    fn as_filename(&self) -> String {
+        self.to_string()
     }
 }
 

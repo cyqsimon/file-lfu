@@ -15,6 +15,10 @@ impl crate::traits::Key for Uuid {
     fn new() -> Self {
         Uuid::new_v4()
     }
+
+    fn as_filename(&self) -> String {
+        self.to_string()
+    }
 }
 
 /// A test struct that simply stores all lines of a file into a Vec<String>.

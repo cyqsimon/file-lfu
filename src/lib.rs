@@ -74,7 +74,7 @@ where
     /// Note that this function does not care whether the input key exists or not,
     /// and therefore makes no guarantee on the existence of this file.
     pub fn get_path_for(&self, key: impl Borrow<K>) -> PathBuf {
-        self.directory.join(key.borrow().to_string())
+        self.directory.join(key.borrow().as_filename())
     }
 
     /// Get whether a key already exists, whether in cache or on disk.
