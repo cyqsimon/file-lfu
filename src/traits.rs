@@ -1,7 +1,6 @@
 use std::{error::Error, fmt::Display, hash::Hash, sync::Arc};
 
 use async_trait::async_trait;
-use uuid::Uuid;
 
 use crate::Path;
 
@@ -20,7 +19,7 @@ where
 #[cfg(feature = "uuid-as-key")]
 impl Key for uuid::Uuid {
     fn new() -> Self {
-        Uuid::new_v4()
+        uuid::Uuid::new_v4()
     }
 }
 
