@@ -118,14 +118,11 @@ fn keys() -> [Uuid; 2] {
 #[fixture]
 fn empty_cache_setup(#[default(3)] capacity: usize) -> (Cache, TempDir) {
     let temp_dir = TempDir::new().unwrap();
-    #[cfg(feature = "utf8-paths")]
-    let temp_path = Path::from_path(temp_dir.path()).unwrap();
-    #[cfg(not(feature = "utf8-paths"))]
     let temp_path = temp_dir.path();
 
     let cache = FileBackedLfuCache::init(temp_path, capacity).unwrap();
 
-    assert_eq!(std::fs::read_dir(temp_dir.path()).unwrap().count(), 0);
+    assert_eq!(std::fs::read_dir(temp_path).unwrap().count(), 0);
     assert_eq!(cache.loaded_count(), 0);
 
     (cache, temp_dir)
@@ -141,9 +138,6 @@ fn empty_cache_setup(#[default(3)] capacity: usize) -> (Cache, TempDir) {
 #[fixture]
 fn unloaded_cache_setup(#[default(3)] capacity: usize, keys: [Uuid; 2]) -> (Cache, TempDir) {
     let temp_dir = TempDir::new().unwrap();
-    #[cfg(feature = "utf8-paths")]
-    let temp_path = Path::from_path(temp_dir.path()).unwrap();
-    #[cfg(not(feature = "utf8-paths"))]
     let temp_path = temp_dir.path();
 
     let res_dir = Path::new("test_res");
@@ -172,9 +166,6 @@ fn unloaded_cache_setup(#[default(3)] capacity: usize, keys: [Uuid; 2]) -> (Cach
 #[fixture]
 async fn filled_cache_setup(keys: [Uuid; 2]) -> (Cache, TempDir) {
     let temp_dir = TempDir::new().unwrap();
-    #[cfg(feature = "utf8-paths")]
-    let temp_path = Path::from_path(temp_dir.path()).unwrap();
-    #[cfg(not(feature = "utf8-paths"))]
     let temp_path = temp_dir.path();
 
     let res_dir = Path::new("test_res");

@@ -1,4 +1,9 @@
-use std::{borrow::Borrow, fmt::Debug, sync::Arc};
+use std::{
+    borrow::Borrow,
+    fmt::Debug,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use lfu_cache::LfuCache;
 
@@ -11,15 +16,6 @@ pub mod error;
 #[cfg(test)]
 mod test;
 pub mod traits;
-
-#[cfg(feature = "utf8-paths")]
-pub type Path = camino::Utf8Path;
-#[cfg(feature = "utf8-paths")]
-pub type PathBuf = camino::Utf8PathBuf;
-#[cfg(not(feature = "utf8-paths"))]
-pub type Path = std::path::Path;
-#[cfg(not(feature = "utf8-paths"))]
-pub type PathBuf = std::path::PathBuf;
 
 /// A LFU (least frequently used) cache layered on top a file system,
 /// where files can be accessed using their unique keys.
