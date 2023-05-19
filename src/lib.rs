@@ -67,6 +67,19 @@ where
         self.cache.len()
     }
 
+    /// Get the backing directory of this cache on disk.
+    pub fn get_backing_directory(&self) -> &Path {
+        &self.directory
+    }
+
+    /// Get the file path in the backing directory for a key.
+    ///
+    /// Note that this function does not care whether the input key exists or not,
+    /// and therefore makes no guarantee on the existence of this file.
+    pub fn get_path_for(&self, key: impl Borrow<K>) -> PathBuf {
+        self.directory.join(key.borrow().to_string())
+    }
+
     /// Get whether a key already exists, whether in cache or on disk.
     pub fn has_key(&self, key: impl Borrow<K>) -> bool {
         let key = key.borrow();
@@ -242,11 +255,6 @@ where
         }
 
         Ok(())
-    }
-
-    /// Helper function to get the file path in the backing directory for a key.
-    fn get_path_for(&self, key: impl Borrow<K>) -> PathBuf {
-        self.directory.join(key.borrow().to_string())
     }
 
     /// Helper function to read an item from the backing directory using its key.
