@@ -1,7 +1,6 @@
 use std::{
     borrow::Borrow,
     fmt::Debug,
-    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -19,6 +18,15 @@ mod error;
 #[cfg(test)]
 mod test;
 mod traits;
+
+#[cfg(not(feature = "utf8-paths"))]
+type Path = std::path::Path;
+#[cfg(not(feature = "utf8-paths"))]
+type PathBuf = std::path::PathBuf;
+#[cfg(feature = "utf8-paths")]
+type Path = camino::Utf8Path;
+#[cfg(feature = "utf8-paths")]
+type PathBuf = camino::Utf8PathBuf;
 
 /// A wrapper that contains metadata about and content of the item being cached.
 #[derive(Debug)]

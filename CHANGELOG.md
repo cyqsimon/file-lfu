@@ -1,5 +1,7 @@
 ## Unreleased
 
+- Added feature `utf8-paths`
+
 ## 1.3.0
 
 - Added `Debug` trait bound on `Key`.

@@ -59,7 +59,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Features
 
+#### `utf8-paths`
+
+Use `Utf8Path` and `Utf8PathBuf` from [`camino`](https://crates.io/crates/camino)
+for everything.
+
+Using this feature adds [`camino`](https://crates.io/crates/camino) as a dependency.
+
+This feature is disabled by default.
+
 #### `uuid-as-key`
+
 Implement the `Key` trait for [`uuid::Uuid`](https://docs.rs/uuid/latest/uuid/struct.Uuid.html),
 so that you can use it as the key directly.
 

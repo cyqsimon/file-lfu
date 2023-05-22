@@ -126,7 +126,7 @@ fn keys() -> [Uuid; 2] {
 #[fixture]
 fn empty_cache_setup(#[default(3)] capacity: usize) -> (Cache, TempDir) {
     let temp_dir = TempDir::new().unwrap();
-    let temp_path = temp_dir.path();
+    let temp_path: &Path = temp_dir.path().try_into().unwrap();
 
     let cache = FileBackedLfuCache::init(temp_path, capacity).unwrap();
 
@@ -146,7 +146,7 @@ fn empty_cache_setup(#[default(3)] capacity: usize) -> (Cache, TempDir) {
 #[fixture]
 fn unloaded_cache_setup(#[default(3)] capacity: usize, keys: [Uuid; 2]) -> (Cache, TempDir) {
     let temp_dir = TempDir::new().unwrap();
-    let temp_path = temp_dir.path();
+    let temp_path: &Path = temp_dir.path().try_into().unwrap();
 
     let res_dir = Path::new("test_res");
     let files: Vec<_> = keys
@@ -174,7 +174,7 @@ fn unloaded_cache_setup(#[default(3)] capacity: usize, keys: [Uuid; 2]) -> (Cach
 #[fixture]
 async fn filled_cache_setup(keys: [Uuid; 2]) -> (Cache, TempDir) {
     let temp_dir = TempDir::new().unwrap();
-    let temp_path = temp_dir.path();
+    let temp_path: &Path = temp_dir.path().try_into().unwrap();
 
     let res_dir = Path::new("test_res");
     let files: Vec<_> = keys
