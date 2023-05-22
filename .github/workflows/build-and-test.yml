@@ -2,9 +2,9 @@ name: Build-and-test
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
   workflow_dispatch:
 
 env:
@@ -20,5 +20,5 @@ jobs:
         mode-flag: [null, --release]
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v3
-    - run: cargo ${{ matrix.cargo-cmd }} ${{ matrix.feature-flag }} ${{ matrix.mode-flag }} --verbose
+      - uses: actions/checkout@v3
+      - run: cargo ${{matrix.cargo-cmd}} ${{matrix.feature-flag}} ${{matrix.mode-flag}} --verbose
