@@ -196,44 +196,50 @@ async fn filled_cache_setup(keys: [Uuid; 2]) -> (Cache, TempDir) {
 
 #[rstest]
 #[tokio::test]
-async fn can_load_when_not_full(unloaded_cache_setup: (Cache, TempDir), keys: [Uuid; 2]) {
+async fn can_load_when_not_full(
+    unloaded_cache_setup: (Cache, TempDir),
+    keys: [Uuid; 2],
+) -> TestResult {
     let (mut cache, temp_dir) = unloaded_cache_setup;
 
     for key in keys.iter() {
-        let res = cache.get_or_load(key).await;
-        assert!(res.is_ok());
+        let _item = cache.get_or_load(key).await?;
     }
     assert_eq!(cache.loaded_count(), 2);
 
     drop(temp_dir);
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
-async fn can_load_when_full(#[with(1)] unloaded_cache_setup: (Cache, TempDir), keys: [Uuid; 2]) {
+async fn can_load_when_full(
+    #[with(1)] unloaded_cache_setup: (Cache, TempDir),
+    keys: [Uuid; 2],
+) -> TestResult {
     let (mut cache, temp_dir) = unloaded_cache_setup;
 
     for key in keys.iter() {
-        let res = cache.get_or_load(key).await;
-        assert!(res.is_ok());
+        let _item = cache.get_or_load(key).await?;
         assert_eq!(cache.loaded_count(), 1);
         assert!(cache.has_loaded_key(key));
     }
 
     drop(temp_dir);
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
-async fn can_get(#[future] filled_cache_setup: (Cache, TempDir), keys: [Uuid; 2]) {
+async fn can_get(#[future] filled_cache_setup: (Cache, TempDir), keys: [Uuid; 2]) -> TestResult {
     let (mut cache, temp_dir) = filled_cache_setup.await;
 
     for key in keys.iter() {
-        let res = cache.get(key);
-        assert!(res.is_ok());
+        let _item = cache.get(key)?;
     }
 
     drop(temp_dir);
+    Ok(())
 }
 
 #[rstest]
@@ -249,16 +255,19 @@ async fn can_reject_random_key(empty_cache_setup: (Cache, TempDir)) {
 
 #[rstest]
 #[tokio::test]
-async fn can_load_mut_when_not_full(unloaded_cache_setup: (Cache, TempDir), keys: [Uuid; 2]) {
+async fn can_load_mut_when_not_full(
+    unloaded_cache_setup: (Cache, TempDir),
+    keys: [Uuid; 2],
+) -> TestResult {
     let (mut cache, temp_dir) = unloaded_cache_setup;
 
     for key in keys.iter() {
-        let res = cache.get_or_load_mut(key).await;
-        assert!(res.is_ok());
+        let _item = cache.get_or_load_mut(key).await?;
     }
     assert_eq!(cache.loaded_count(), 2);
 
     drop(temp_dir);
+    Ok(())
 }
 
 #[rstest]
@@ -266,30 +275,33 @@ async fn can_load_mut_when_not_full(unloaded_cache_setup: (Cache, TempDir), keys
 async fn can_load_mut_when_full(
     #[with(1)] unloaded_cache_setup: (Cache, TempDir),
     keys: [Uuid; 2],
-) {
+) -> TestResult {
     let (mut cache, temp_dir) = unloaded_cache_setup;
 
     for key in keys.iter() {
-        let res = cache.get_or_load_mut(key).await;
-        assert!(res.is_ok());
+        let _item = cache.get_or_load_mut(key).await?;
         assert_eq!(cache.loaded_count(), 1);
         assert!(cache.has_loaded_key(key));
     }
 
     drop(temp_dir);
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
-async fn can_get_mut(#[future] filled_cache_setup: (Cache, TempDir), keys: [Uuid; 2]) {
+async fn can_get_mut(
+    #[future] filled_cache_setup: (Cache, TempDir),
+    keys: [Uuid; 2],
+) -> TestResult {
     let (mut cache, temp_dir) = filled_cache_setup.await;
 
     for key in keys.iter() {
-        let res = cache.get_mut(key);
-        assert!(res.is_ok());
+        let _item = cache.get_mut(key)?;
     }
 
     drop(temp_dir);
+    Ok(())
 }
 
 #[rstest]
@@ -297,77 +309,83 @@ async fn can_get_mut(#[future] filled_cache_setup: (Cache, TempDir), keys: [Uuid
 async fn can_reject_get_mut_when_shared(
     #[future] filled_cache_setup: (Cache, TempDir),
     keys: [Uuid; 2],
-) {
+) -> TestResult {
     let (mut cache, temp_dir) = filled_cache_setup.await;
 
     let [shared, unshared] = &keys;
 
     // keep an outstanding reference to one of the items
-    let shared_item = cache.get(shared).unwrap();
+    let shared_item = cache.get(shared)?;
 
     let shared_res = cache.get_mut(shared);
     assert!(matches!(shared_res, Err(Error::Immutable(_))));
-    let unshared_res = cache.get_mut(unshared);
-    assert!(unshared_res.is_ok());
+    let _mut_ref = cache.get_mut(unshared)?;
 
     // hold the outstanding reference for long enough
     drop(shared_item);
 
     drop(temp_dir);
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
-async fn can_mutate(empty_cache_setup: (Cache, TempDir)) {
+async fn can_mutate(empty_cache_setup: (Cache, TempDir)) -> TestResult {
     let (mut cache, temp_dir) = empty_cache_setup;
 
     let original = AllLines::random();
-    let key = cache.push(original.clone()).await.unwrap();
-    assert_eq!(cache.get(&key).unwrap().as_ref(), &original);
+    let key = cache.push(original.clone()).await?;
+    assert_eq!(cache.get(&key)?.as_ref(), &original);
 
     let new = AllLines::random();
-    *cache.get_or_load_mut(&key).await.unwrap() = new.clone();
-    assert_eq!(cache.get(&key).unwrap().as_ref(), &new);
+    *cache.get_or_load_mut(&key).await? = new.clone();
+    assert_eq!(cache.get(&key)?.as_ref(), &new);
 
     drop(temp_dir);
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
-async fn can_push_without_flush(empty_cache_setup: (Cache, TempDir)) {
+async fn can_push_without_flush(empty_cache_setup: (Cache, TempDir)) -> TestResult {
     let (mut cache, temp_dir) = empty_cache_setup;
 
-    let key = cache.push(AllLines::random()).await.unwrap();
+    let key = cache.push(AllLines::random()).await?;
     assert_eq!(cache.loaded_count(), 1);
     assert!(cache.has_loaded_key(&key));
     assert!(!cache.has_flushed_key(&key));
 
     drop(temp_dir);
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
-async fn can_direct_flush(empty_cache_setup: (Cache, TempDir)) {
+async fn can_direct_flush(empty_cache_setup: (Cache, TempDir)) -> TestResult {
     let (cache, temp_dir) = empty_cache_setup;
 
-    let key = cache.direct_flush(AllLines::random()).await.unwrap();
+    let key = cache.direct_flush(AllLines::random()).await?;
     assert_eq!(cache.loaded_count(), 0);
     assert!(!cache.has_loaded_key(&key));
     assert!(cache.has_flushed_key(&key));
 
     drop(temp_dir);
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
-async fn can_evict_lfu(#[future] filled_cache_setup: (Cache, TempDir), keys: [Uuid; 2]) {
+async fn can_evict_lfu(
+    #[future] filled_cache_setup: (Cache, TempDir),
+    keys: [Uuid; 2],
+) -> TestResult {
     let (mut cache, temp_dir) = filled_cache_setup.await;
 
     let [extra_access, should_evict] = &keys;
 
     // extra access on 1 item
-    let _item = cache.get_or_load(extra_access).await.unwrap();
-    let new = cache.push(AllLines::random()).await.unwrap();
+    let _item = cache.get_or_load(extra_access).await?;
+    let new = cache.push(AllLines::random()).await?;
 
     assert_eq!(cache.loaded_count(), 2);
     assert!(cache.has_loaded_key(extra_access));
@@ -375,6 +393,7 @@ async fn can_evict_lfu(#[future] filled_cache_setup: (Cache, TempDir), keys: [Uu
     assert!(cache.has_loaded_key(new));
 
     drop(temp_dir);
+    Ok(())
 }
 
 #[rstest]
@@ -460,29 +479,30 @@ async fn wont_flush_lfu_when_not_mutated(
 
 #[rstest]
 #[tokio::test]
-async fn can_manual_flush(empty_cache_setup: (Cache, TempDir)) {
+async fn can_manual_flush(empty_cache_setup: (Cache, TempDir)) -> TestResult {
     let (mut cache, temp_dir) = empty_cache_setup;
 
-    let key = cache.push(AllLines::random()).await.unwrap();
+    let key = cache.push(AllLines::random()).await?;
     assert!(cache.has_loaded_key(&key));
     assert!(!cache.has_flushed_key(&key));
 
-    cache.flush(&key).await.unwrap();
+    cache.flush(&key).await?;
     assert!(cache.has_loaded_key(&key));
     assert!(cache.has_flushed_key(&key));
 
     drop(temp_dir);
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
-async fn can_manual_flush_all(#[with(3)] empty_cache_setup: (Cache, TempDir)) {
+async fn can_manual_flush_all(#[with(3)] empty_cache_setup: (Cache, TempDir)) -> TestResult {
     let (mut cache, temp_dir) = empty_cache_setup;
 
     // push 3 new items into cache
     let mut keys = vec![];
     for _ in 0..3 {
-        let new_key = cache.push(AllLines::random()).await.unwrap();
+        let new_key = cache.push(AllLines::random()).await?;
         keys.push(new_key);
     }
     // nothing should be on disk at this point
@@ -499,6 +519,7 @@ async fn can_manual_flush_all(#[with(3)] empty_cache_setup: (Cache, TempDir)) {
     }
 
     drop(temp_dir);
+    Ok(())
 }
 
 #[rstest]
@@ -594,29 +615,30 @@ async fn manual_flush_all_only_flushes_mutated(
 async fn mutation_persists_after_lfu_flush(
     #[future] filled_cache_setup: (Cache, TempDir),
     keys: [Uuid; 2],
-) {
+) -> TestResult {
     let (mut cache, temp_dir) = filled_cache_setup.await;
 
     let [to_mutate, extra_access] = &keys;
 
     // mutate
     let mutate_new = AllLines::random();
-    *cache.get_mut(to_mutate).unwrap() = mutate_new.clone();
+    *cache.get_mut(to_mutate)? = mutate_new.clone();
 
     // extras accesses to ensure lfu order
-    let _access0 = cache.get(extra_access).unwrap();
-    let _access1 = cache.get(extra_access).unwrap();
+    let _access0 = cache.get(extra_access)?;
+    let _access1 = cache.get(extra_access)?;
     assert_eq!(cache.cache.peek_lfu_key(), Some(to_mutate));
 
     // induce eviction
-    let _new_item = cache.push(AllLines::random()).await.unwrap();
+    let _new_item = cache.push(AllLines::random()).await?;
     assert!(!cache.has_loaded_key(to_mutate));
 
     // mutation should persist
-    let mutated = cache.get_or_load(to_mutate).await.unwrap();
+    let mutated = cache.get_or_load(to_mutate).await?;
     assert_eq!(mutated.as_ref(), &mutate_new);
 
     drop(temp_dir);
+    Ok(())
 }
 
 #[rstest]
@@ -624,50 +646,52 @@ async fn mutation_persists_after_lfu_flush(
 async fn mutation_persists_after_manual_flush(
     #[future] filled_cache_setup: (Cache, TempDir),
     keys: [Uuid; 2],
-) {
+) -> TestResult {
     let (mut cache, temp_dir) = filled_cache_setup.await;
 
     let [to_mutate, _] = &keys;
 
     // mutate
     let mutate_new = AllLines::random();
-    *cache.get_mut(to_mutate).unwrap() = mutate_new.clone();
+    *cache.get_mut(to_mutate)? = mutate_new.clone();
 
     // flush and clear
     cache.clear_cache(true).await.unwrap();
     assert_eq!(cache.loaded_count(), 0);
 
     // mutation should persist
-    let mutated = cache.get_or_load(to_mutate).await.unwrap();
+    let mutated = cache.get_or_load(to_mutate).await?;
     assert_eq!(mutated.as_ref(), &mutate_new);
 
     drop(temp_dir);
+    Ok(())
 }
 
 #[rstest]
 #[tokio::test]
-async fn can_delete(#[future] filled_cache_setup: (Cache, TempDir), keys: [Uuid; 2]) {
+async fn can_delete(#[future] filled_cache_setup: (Cache, TempDir), keys: [Uuid; 2]) -> TestResult {
     let (mut cache, temp_dir) = filled_cache_setup.await;
 
     let [to_delete, should_stay] = &keys;
 
-    cache.delete(to_delete).await.unwrap();
+    cache.delete(to_delete).await?;
 
     assert!(!cache.has_key(to_delete));
     assert!(cache.has_key(should_stay));
 
     drop(temp_dir);
+    Ok(())
 }
 
 #[rstest]
 #[case(true)]
 #[case(false)]
 #[tokio::test]
-async fn can_clear(empty_cache_setup: (Cache, TempDir), #[case] with_flush: bool) {
+async fn can_clear(empty_cache_setup: (Cache, TempDir), #[case] with_flush: bool) -> TestResult {
     let (mut cache, temp_dir) = empty_cache_setup;
 
     let new = AllLines::random();
-    let key = cache.push(new).await.unwrap();
+    let key = cache.push(new).await?;
     assert_eq!(cache.loaded_count(), 1);
     assert!(!cache.has_flushed_key(&key));
 
@@ -676,4 +700,5 @@ async fn can_clear(empty_cache_setup: (Cache, TempDir), #[case] with_flush: bool
     assert_eq!(cache.has_flushed_key(&key), with_flush);
 
     drop(temp_dir);
+    Ok(())
 }
