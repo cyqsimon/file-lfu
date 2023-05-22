@@ -1,5 +1,7 @@
 ## Unreleased
 
+## 1.3.0
+
 - Added `Debug` trait bound on `Key`
 - Impl `Display` for `Error`
 - Added mutation tracking.
