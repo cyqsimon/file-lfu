@@ -1,5 +1,7 @@
 ## Unreleased
 
+## 1.4.0
+
 - Added feature `utf8-paths`
 
 ## 1.3.0
