@@ -1,11 +1,14 @@
-use std::{fmt, str::FromStr, sync::Arc};
+use std::{fmt, str::FromStr, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use fs_extra::dir::CopyOptions;
 use rand::Rng;
 use rstest::{fixture, rstest};
 use temp_dir::TempDir;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::{
+    io::{AsyncBufReadExt, BufReader},
+    time,
+};
 use uuid::Uuid;
 
 use crate::{error::Error, traits::AsyncFileRepr, FileBackedLfuCache, Path};
@@ -94,8 +97,9 @@ impl From<std::io::Error> for TestError {
     }
 }
 
-/// A convenience type alias to avoid writing it over and over again.
+// convenience type aliases
 type Cache = FileBackedLfuCache<Uuid, AllLines>;
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// The keys of the existing test files.
 #[fixture]
@@ -356,7 +360,7 @@ async fn can_direct_flush(empty_cache_setup: (Cache, TempDir)) {
 
 #[rstest]
 #[tokio::test]
-async fn can_evict_and_flush_lfu(#[future] filled_cache_setup: (Cache, TempDir), keys: [Uuid; 2]) {
+async fn can_evict_lfu(#[future] filled_cache_setup: (Cache, TempDir), keys: [Uuid; 2]) {
     let (mut cache, temp_dir) = filled_cache_setup.await;
 
     let [extra_access, should_evict] = &keys;
@@ -371,6 +375,87 @@ async fn can_evict_and_flush_lfu(#[future] filled_cache_setup: (Cache, TempDir),
     assert!(cache.has_loaded_key(new));
 
     drop(temp_dir);
+}
+
+#[rstest]
+#[tokio::test]
+async fn will_flush_lfu_when_mutated(
+    #[future] filled_cache_setup: (Cache, TempDir),
+    keys: [Uuid; 2],
+) -> TestResult {
+    let (mut cache, temp_dir) = filled_cache_setup.await;
+
+    let [extra_access, should_evict] = &keys;
+
+    // record modification time
+    let old_mtime = tokio::fs::metadata(cache.get_path_for(should_evict))
+        .await?
+        .modified()?;
+
+    // mutate 1 item
+    // no actual mutation is necessary
+    // simply obtaining a mutable reference should suffice
+    let _mut_ref = cache.get_mut(should_evict)?;
+
+    // extra accesses on 1 item
+    for _ in 0..10 {
+        let _item = cache.get_or_load(extra_access).await?;
+    }
+
+    // wait a bit before triggering LFU flush
+    time::sleep(Duration::from_millis(100)).await;
+
+    // trigger LFU flush
+    let _new = cache.push(AllLines::random()).await?;
+    assert!(!cache.has_loaded_key(should_evict));
+
+    // compare modification times
+    let new_mtime = tokio::fs::metadata(cache.get_path_for(should_evict))
+        .await?
+        .modified()?;
+    assert!(old_mtime < new_mtime);
+
+    drop(temp_dir);
+    Ok(())
+}
+
+#[rstest]
+#[tokio::test]
+async fn wont_flush_lfu_when_not_mutated(
+    #[future] filled_cache_setup: (Cache, TempDir),
+    keys: [Uuid; 2],
+) -> TestResult {
+    let (mut cache, temp_dir) = filled_cache_setup.await;
+
+    let [extra_access, should_evict] = &keys;
+
+    // record modification time
+    let old_mtime = tokio::fs::metadata(cache.get_path_for(should_evict))
+        .await?
+        .modified()?;
+
+    // no mutations on `should_evict`
+
+    // extra accesses on 1 item
+    for _ in 0..10 {
+        let _item = cache.get_or_load(extra_access).await?;
+    }
+
+    // wait a bit before triggering LFU flush
+    time::sleep(Duration::from_millis(100)).await;
+
+    // trigger LFU flush
+    let _new = cache.push(AllLines::random()).await?;
+    assert!(!cache.has_loaded_key(should_evict));
+
+    // compare modification times
+    let new_mtime = tokio::fs::metadata(cache.get_path_for(should_evict))
+        .await?
+        .modified()?;
+    assert!(old_mtime == new_mtime);
+
+    drop(temp_dir);
+    Ok(())
 }
 
 #[rstest]
@@ -414,6 +499,94 @@ async fn can_manual_flush_all(#[with(3)] empty_cache_setup: (Cache, TempDir)) {
     }
 
     drop(temp_dir);
+}
+
+#[rstest]
+#[tokio::test]
+async fn manual_flush_only_flushes_mutated(
+    #[future] filled_cache_setup: (Cache, TempDir),
+    keys: [Uuid; 2],
+) -> TestResult {
+    let (mut cache, temp_dir) = filled_cache_setup.await;
+
+    let [to_mutate, no_mutate] = &keys;
+
+    // record modification times
+    let to_mutate_old_mtime = tokio::fs::metadata(cache.get_path_for(to_mutate))
+        .await?
+        .modified()?;
+    let no_mutate_old_mtime = tokio::fs::metadata(cache.get_path_for(no_mutate))
+        .await?
+        .modified()?;
+
+    // mutate 1 item
+    // no actual mutation is necessary
+    // simply obtaining a mutable reference should suffice
+    let _mut_ref = cache.get_mut(to_mutate)?;
+
+    // wait a bit before flushing
+    time::sleep(Duration::from_millis(100)).await;
+
+    // flush
+    cache.flush(to_mutate).await?;
+    cache.flush(no_mutate).await?;
+
+    // compare modification times
+    let to_mutate_new_mtime = tokio::fs::metadata(cache.get_path_for(to_mutate))
+        .await?
+        .modified()?;
+    let no_mutate_new_mtime = tokio::fs::metadata(cache.get_path_for(no_mutate))
+        .await?
+        .modified()?;
+    assert!(to_mutate_old_mtime < to_mutate_new_mtime);
+    assert!(no_mutate_old_mtime == no_mutate_new_mtime);
+
+    drop(temp_dir);
+    Ok(())
+}
+
+#[rstest]
+#[tokio::test]
+async fn manual_flush_all_only_flushes_mutated(
+    #[future] filled_cache_setup: (Cache, TempDir),
+    keys: [Uuid; 2],
+) -> TestResult {
+    let (mut cache, temp_dir) = filled_cache_setup.await;
+
+    let [to_mutate, no_mutate] = &keys;
+
+    // record modification times
+    let to_mutate_old_mtime = tokio::fs::metadata(cache.get_path_for(to_mutate))
+        .await?
+        .modified()?;
+    let no_mutate_old_mtime = tokio::fs::metadata(cache.get_path_for(no_mutate))
+        .await?
+        .modified()?;
+
+    // mutate 1 item
+    // no actual mutation is necessary
+    // simply obtaining a mutable reference should suffice
+    let _mut_ref = cache.get_mut(to_mutate)?;
+
+    // wait a bit before flushing
+    time::sleep(Duration::from_millis(100)).await;
+
+    // flush all
+    let flush_result = cache.flush_all().await;
+    assert!(flush_result.is_ok());
+
+    // compare modification times
+    let to_mutate_new_mtime = tokio::fs::metadata(cache.get_path_for(to_mutate))
+        .await?
+        .modified()?;
+    let no_mutate_new_mtime = tokio::fs::metadata(cache.get_path_for(no_mutate))
+        .await?
+        .modified()?;
+    assert!(to_mutate_old_mtime < to_mutate_new_mtime);
+    assert!(no_mutate_old_mtime == no_mutate_new_mtime);
+
+    drop(temp_dir);
+    Ok(())
 }
 
 #[rstest]

@@ -2,7 +2,10 @@ use std::{
     borrow::Borrow,
     fmt::Debug,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
 use lfu_cache::LfuCache;
@@ -16,6 +19,46 @@ mod error;
 #[cfg(test)]
 mod test;
 mod traits;
+
+/// A wrapper that contains metadata about and content of the item being cached.
+#[derive(Debug)]
+struct CacheItem<T>
+where
+    T: AsyncFileRepr,
+{
+    /// A flag indicating whether this item needs to be flushed on eviction.
+    ///
+    /// This value is initially set to `false` for loaded items, and `true`
+    /// for pushed items.
+    ///
+    /// On any mutable borrow, this value is set to `true`.
+    needs_flush: AtomicBool,
+
+    /// The actual content of the item.
+    content: Arc<T>,
+}
+impl<T> CacheItem<T>
+where
+    T: AsyncFileRepr,
+{
+    /// Create a new cache item and mark it as loaded (i.e. does not need a flush
+    /// on eviction just yet).
+    fn new_loaded(content: T) -> Self {
+        Self {
+            needs_flush: AtomicBool::new(false),
+            content: Arc::new(content),
+        }
+    }
+
+    /// Create a new cache item and mark it as pushed (i.e. needs a flush
+    /// on eviction).
+    fn new_pushed(content: T) -> Self {
+        Self {
+            needs_flush: AtomicBool::new(true),
+            content: Arc::new(content),
+        }
+    }
+}
 
 /// A LFU (least frequently used) cache layered on top a file system,
 /// where files can be accessed using their unique keys.
@@ -36,8 +79,9 @@ where
     directory: PathBuf,
 
     /// The cache.
-    cache: LfuCache<K, Arc<T>>,
+    cache: LfuCache<K, CacheItem<T>>,
 }
+
 impl<K, T> FileBackedLfuCache<K, T>
 where
     K: Key,
@@ -100,7 +144,7 @@ where
 
         self.cache
             .get(key)
-            .cloned()
+            .map(|item| Arc::clone(&item.content))
             .ok_or(Error::NotInCache(key.clone()))
     }
 
@@ -112,11 +156,19 @@ where
     pub fn get_mut(&mut self, key: impl Borrow<K>) -> Result<&mut T, Error<K, T::Err>> {
         let key = key.borrow();
 
-        let Some(item) = self.cache.get_mut(key) else {
+        let Some(CacheItem { needs_flush, content }) = self.cache.get_mut(key) else {
             Err(Error::NotInCache(key.clone()))?
         };
 
-        Arc::get_mut(item).ok_or(Error::Immutable(key.clone()))
+        let mut_ref = match Arc::get_mut(content) {
+            Some(r) => {
+                needs_flush.store(true, Ordering::Relaxed);
+                r
+            }
+            None => Err(Error::Immutable(key.clone()))?,
+        };
+
+        Ok(mut_ref)
     }
 
     /// Using a unique key, get an item from cache, or if it is not found in cache,
@@ -128,17 +180,17 @@ where
 
         // lookup cache, retrieve if loaded
         if let Some(item) = self.cache.get(key) {
-            return Ok(Arc::clone(item));
+            return Ok(Arc::clone(&item.content));
         }
 
         // load from disk
-        let item = Arc::new(self.read_from_disk(key, Error::NotFound).await?);
+        let item = self.read_from_disk(key, Error::NotFound).await?;
+        let content = Arc::clone(&item.content);
 
         // insert
-        self.insert_and_handle_eviction(key.clone(), Arc::clone(&item))
-            .await?;
+        self.insert_and_handle_eviction(key.clone(), item).await?;
 
-        Ok(item)
+        Ok(content)
     }
 
     /// Using a unique key, get a mutable reference to an item from cache,
@@ -158,17 +210,24 @@ where
         // lookup cache, load from disk if not found
         if !self.has_loaded_key(key) {
             let item = self.read_from_disk(key, Error::NotFound).await?;
-            self.insert_and_handle_eviction(key.clone(), Arc::new(item))
-                .await?;
+            self.insert_and_handle_eviction(key.clone(), item).await?;
         }
 
         // retrieve cache
-        Arc::get_mut(
-            self.cache
-                .get_mut(key)
-                .expect("something is wrong with Arc"), // item either exists in cache or was just loaded
-        )
-        .ok_or(Error::Immutable(key.clone()))
+        let CacheItem { needs_flush, content } = self
+            .cache
+            .get_mut(key)
+            .expect("something is wrong with Arc"); // item either exists in cache or was just loaded
+
+        let mut_ref = match Arc::get_mut(content) {
+            Some(r) => {
+                needs_flush.store(true, Ordering::Relaxed);
+                r
+            }
+            None => Err(Error::Immutable(key.clone()))?,
+        };
+
+        Ok(mut_ref)
     }
 
     /// Push an item into cache, assign it a unique key, then return the key.
@@ -181,7 +240,7 @@ where
         let key = K::new();
 
         // insert
-        self.insert_and_handle_eviction(key.clone(), Arc::new(item))
+        self.insert_and_handle_eviction(key.clone(), CacheItem::new_pushed(item))
             .await?;
 
         Ok(key)
@@ -209,14 +268,18 @@ where
     pub async fn flush(&self, key: impl Borrow<K>) -> Result<(), Error<K, T::Err>> {
         let key = key.borrow();
 
-        let item = self
+        let CacheItem { needs_flush, content } = self
             .cache
             .peek_iter()
             .find_map(|(k, v)| (k == key).then_some(v))
             .ok_or(Error::NotInCache(key.clone()))?;
 
-        let flush_path = self.get_path_for(key);
-        item.flush(flush_path).await?;
+        // flush only if necessary
+        if needs_flush.load(Ordering::Acquire) {
+            let flush_path = self.get_path_for(key);
+            content.flush(flush_path).await?;
+            needs_flush.store(false, Ordering::Release);
+        }
 
         Ok(())
     }
@@ -232,10 +295,14 @@ where
     pub async fn flush_all(&self) -> Result<(), Vec<Error<K, T::Err>>> {
         let mut errors = vec![];
 
-        for (key, item) in self.cache.peek_iter() {
-            let flush_path = self.get_path_for(key);
-            if let Err(err) = item.flush(flush_path).await {
-                errors.push(err.into());
+        for (key, CacheItem { needs_flush, content }) in self.cache.peek_iter() {
+            // flush only if necessary
+            if needs_flush.load(Ordering::Acquire) {
+                let flush_path = self.get_path_for(key);
+                if let Err(err) = content.flush(flush_path).await {
+                    errors.push(err.into());
+                }
+                needs_flush.store(false, Ordering::Release);
             }
         }
 
@@ -286,7 +353,7 @@ where
         &self,
         key: impl Borrow<K>,
         not_found_variant: F,
-    ) -> Result<T, Error<K, T::Err>>
+    ) -> Result<CacheItem<T>, Error<K, T::Err>>
     where
         F: FnOnce(K) -> Error<K, T::Err>,
     {
@@ -296,7 +363,8 @@ where
         if !load_path.is_file() {
             Err(not_found_variant(key.clone()))?
         }
-        let item = T::load(load_path).await?;
+        let content = T::load(load_path).await?;
+        let item = CacheItem::new_loaded(content);
 
         Ok(item)
     }
@@ -306,7 +374,11 @@ where
     ///
     /// Note that this function requires that the provided key is not yet loaded.
     /// If this key can already be found in cache, this function wil panic.
-    async fn insert_and_handle_eviction(&mut self, key: K, item: Arc<T>) -> Result<(), T::Err> {
+    async fn insert_and_handle_eviction(
+        &mut self,
+        key: K,
+        item: CacheItem<T>,
+    ) -> Result<(), T::Err> {
         assert!(!self.has_loaded_key(&key), "key already present in cache");
 
         // when peek_lfu_key() returns `Some`, it just means there is at least 1 item;
@@ -315,9 +387,12 @@ where
         let evicted_item = self.cache.insert(key.clone(), item);
 
         match (flush_key, evicted_item) {
-            (Some(key), Some(evicted)) => {
-                let flush_path = self.get_path_for(key);
-                evicted.flush(flush_path).await?;
+            (Some(key), Some(CacheItem { needs_flush, content })) => {
+                // flush only if necessary
+                if needs_flush.load(Ordering::Relaxed) {
+                    let flush_path = self.get_path_for(key);
+                    content.flush(flush_path).await?;
+                }
             }
             (_, None) => {
                 // nothing evicted
