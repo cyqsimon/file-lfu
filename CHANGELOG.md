@@ -1,4 +1,7 @@
-## Unreleased
+## 1.4.1
+
+- Final version
+- Add deprecation notice
 
 ## 1.4.0
 

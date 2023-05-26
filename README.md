@@ -4,6 +4,12 @@ A least-frequently-used cache layered on a directory.
 
 [crates.io](https://crates.io/crates/file-lfu) [docs.rs](https://docs.rs/file-lfu/latest/file_lfu/index.html)
 
+## Deprecated
+
+The API was not well-thought-out and the backing caching algorithm is unsuitable
+for the intended use case of this crate. I ***strongly recommend*** you do not
+use this crate for any semi-serious project.
+
 ## Quick start
 
 1. Implement `AsyncFileRepr` for the type you intend to cache.
